@@ -49,7 +49,24 @@ class BootScene extends Phaser.Scene {
       g.fillRect(17, 15, 3, 8);
 
       g.fillStyle(palette.black);
-      if (pose === 'runA') {
+      if (pose === 'crouch') {
+        g.clear();
+        g.fillStyle(0x000000, 0.25);
+        g.fillRect(4, 25, 16, 3);
+        g.fillStyle(palette.skin);
+        g.fillRect(9, 7, 8, 7);
+        g.fillStyle(0x3a2722);
+        g.fillRect(8, 6, 10, 3);
+        g.fillRect(8, 9, 2, 4);
+        g.fillStyle(accent);
+        g.fillRect(10, 14, 6, 3);
+        g.fillStyle(coat);
+        g.fillRect(6, 17, 13, 6);
+        g.fillRect(4, 18, 4, 4);
+        g.fillStyle(palette.black);
+        g.fillRect(7, 23, 6, 4);
+        g.fillRect(13, 22, 7, 5);
+      } else if (pose === 'runA') {
         g.fillRect(7, 24, 4, 6);
         g.fillRect(14, 24, 4, 4);
         g.fillRect(16, 28, 5, 3);
@@ -75,6 +92,7 @@ class BootScene extends Phaser.Scene {
     makeCharacter('gianlico-run-a', 'runA');
     makeCharacter('gianlico-run-b', 'runB');
     makeCharacter('gianlico-jump', 'jump');
+    makeCharacter('gianlico-crouch', 'crouch');
     makeCharacter('borge', 'idle', 0x292126, palette.gold);
 
     const platform = this.add.graphics();
@@ -219,7 +237,7 @@ class RomeScene extends Phaser.Scene {
     this.createRain();
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys('A,D,W,E,SPACE');
+    this.keys = this.input.keyboard.addKeys('A,D,W,S,E,SPACE');
 
     this.missionStage = 0;
     this.hasLedger = false;
@@ -273,26 +291,42 @@ class RomeScene extends Phaser.Scene {
       this.platforms.create(x + 32, groundY, 'platform').refreshBody();
     }
 
-    const ledges = [
-      [520, 535, 4], [910, 455, 3], [1240, 545, 3], [1540, 500, 2],
-      [1870, 420, 4], [2250, 520, 2], [2490, 450, 3], [2800, 380, 3],
-      [3150, 500, 4], [3570, 430, 3]
+    const streetObstacles = [
+      [720, 610], [752, 610],
+      [1730, 610], [1762, 610],
+      [3010, 610], [3042, 610]
     ];
 
-    ledges.forEach(([x, y, count]) => {
-      for (let i = 0; i < count; i++) {
-        this.platforms.create(x + i * 64, y, 'platform').refreshBody();
-      }
-    });
-
-    const crates = [
-      [750, 610], [782, 610], [1770, 610], [1802, 610], [1834, 610],
-      [2960, 610], [2992, 610]
-    ];
-
-    crates.forEach(([x, y]) => {
+    streetObstacles.forEach(([x, y]) => {
       const c = this.platforms.create(x, y, 'crate');
       c.refreshBody();
+    });
+
+    // Sokak seviyesinde doğal traversal: alçak geçit, basamak ve depo rampası.
+    this.streetGeometry = [];
+
+    const lowPass = this.add.rectangle(2230, 555, 250, 34, 0x302b28).setDepth(4);
+    this.physics.add.existing(lowPass, true);
+    this.streetGeometry.push(lowPass);
+
+    const sidePosts = [
+      this.add.rectangle(2112, 590, 18, 120, 0x3d3632).setDepth(4),
+      this.add.rectangle(2348, 590, 18, 120, 0x3d3632).setDepth(4)
+    ];
+    sidePosts.forEach((post) => {
+      this.physics.add.existing(post, true);
+      this.streetGeometry.push(post);
+    });
+
+    const steps = [
+      [2620, 626, 80, 32],
+      [2690, 610, 80, 48],
+      [2760, 594, 80, 64]
+    ];
+    steps.forEach(([x, y, w, h]) => {
+      const step = this.add.rectangle(x, y, w, h, 0x4d4540).setDepth(3);
+      this.physics.add.existing(step, true);
+      this.streetGeometry.push(step);
     });
 
     for (let x = 250; x < this.worldWidth; x += 460) {
@@ -322,6 +356,7 @@ class RomeScene extends Phaser.Scene {
     this.player.body.setDragX(0);
 
     this.moveSpeed = 300;
+    this.crouchSpeed = 145;
     this.groundAccel = 2600;
     this.airAccel = 1500;
     this.groundDecel = 3200;
@@ -330,8 +365,12 @@ class RomeScene extends Phaser.Scene {
     this.jumpBufferMs = 120;
     this.lastGroundedAt = -Infinity;
     this.jumpBufferedUntil = -Infinity;
+    this.isCrouching = false;
 
     this.physics.add.collider(this.player, this.platforms);
+    if (this.streetGeometry) {
+      this.streetGeometry.forEach((object) => this.physics.add.collider(this.player, object));
+    }
   }
 
   createBorge() {
@@ -367,7 +406,7 @@ class RomeScene extends Phaser.Scene {
       fontFamily: 'Courier New', fontSize: '16px', color: '#e7ddca'
     }).setScrollFactor(0).setDepth(51);
 
-    this.hintText = this.add.text(GAME_W - 28, 28, 'A/D veya ←/→  hareket   ·   SPACE zıpla   ·   E etkileşim', {
+    this.hintText = this.add.text(GAME_W - 28, 28, 'A/D hareket · SPACE zıpla · S/↓ çömel · E etkileşim', {
       fontFamily: 'Courier New', fontSize: '13px', color: '#c1b6a7',
       backgroundColor: '#100d0dcc', padding: { x: 10, y: 7 }
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(51);
@@ -424,19 +463,31 @@ class RomeScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.keys.W) ||
       Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
     const jumpHeld = this.cursors.up.isDown || this.keys.W.isDown || this.keys.SPACE.isDown;
+    const crouchHeld = this.cursors.down.isDown || this.keys.S.isDown;
     const grounded = this.player.body.blocked.down;
     const now = this.time.now;
     const dt = Math.min(delta / 1000, 0.033);
 
     if (grounded) this.lastGroundedAt = now;
-    if (jumpPressed) this.jumpBufferedUntil = now + this.jumpBufferMs;
+    if (jumpPressed && !crouchHeld) this.jumpBufferedUntil = now + this.jumpBufferMs;
+
+    const shouldCrouch = grounded && crouchHeld;
+    if (shouldCrouch !== this.isCrouching) {
+      this.isCrouching = shouldCrouch;
+      if (this.isCrouching) {
+        this.player.body.setSize(15, 18).setOffset(4, 13);
+      } else {
+        this.player.body.setSize(15, 28).setOffset(4, 3);
+      }
+    }
 
     const input = (right ? 1 : 0) - (left ? 1 : 0);
     const accel = grounded ? this.groundAccel : this.airAccel;
     const currentVx = this.player.body.velocity.x;
 
     if (input !== 0) {
-      const targetVx = input * this.moveSpeed;
+      const targetSpeed = this.isCrouching ? this.crouchSpeed : this.moveSpeed;
+      const targetVx = input * targetSpeed;
       const nextVx = Phaser.Math.Linear(
         currentVx,
         targetVx,
@@ -453,7 +504,7 @@ class RomeScene extends Phaser.Scene {
     }
 
     const canCoyoteJump = now - this.lastGroundedAt <= this.coyoteMs;
-    if (this.jumpBufferedUntil >= now && canCoyoteJump) {
+    if (!this.isCrouching && this.jumpBufferedUntil >= now && canCoyoteJump) {
       this.player.setVelocityY(this.jumpVelocity);
       this.jumpBufferedUntil = -Infinity;
       this.lastGroundedAt = -Infinity;
@@ -483,6 +534,11 @@ class RomeScene extends Phaser.Scene {
   updatePlayerVisual() {
     const vx = this.player.body.velocity.x;
     const vy = this.player.body.velocity.y;
+
+    if (this.isCrouching) {
+      this.player.setTexture('gianlico-crouch');
+      return;
+    }
 
     if (!this.player.body.blocked.down) {
       this.player.setTexture('gianlico-jump');
