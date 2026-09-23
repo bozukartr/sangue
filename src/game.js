@@ -226,7 +226,7 @@ class RomeScene extends Phaser.Scene {
     this.dialogueOpen = false;
     this.setObjective('Borge’u bul · Trastevere');
 
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08, -220, 35);
+    this.cameras.main.startFollow(this.player, true, 0.14, 0.14, -220, 35);
     this.cameras.main.fadeIn(450, 16, 13, 13);
 
     this.time.delayedCall(550, () => {
@@ -318,8 +318,18 @@ class RomeScene extends Phaser.Scene {
       .setCollideWorldBounds(true);
 
     this.player.body.setSize(15, 28).setOffset(4, 3);
-    this.player.body.setMaxVelocity(320, 850);
-    this.player.body.setDragX(1500);
+    this.player.body.setMaxVelocity(300, 1000);
+    this.player.body.setDragX(0);
+
+    this.moveSpeed = 300;
+    this.groundAccel = 2600;
+    this.airAccel = 1500;
+    this.groundDecel = 3200;
+    this.jumpVelocity = -760;
+    this.coyoteMs = 110;
+    this.jumpBufferMs = 120;
+    this.lastGroundedAt = -Infinity;
+    this.jumpBufferedUntil = -Infinity;
 
     this.physics.add.collider(this.player, this.platforms);
   }
@@ -410,19 +420,47 @@ class RomeScene extends Phaser.Scene {
 
     const left = this.cursors.left.isDown || this.keys.A.isDown;
     const right = this.cursors.right.isDown || this.keys.D.isDown;
-    const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+    const jumpPressed = Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.keys.W) ||
       Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
+    const jumpHeld = this.cursors.up.isDown || this.keys.W.isDown || this.keys.SPACE.isDown;
+    const grounded = this.player.body.blocked.down;
+    const now = this.time.now;
+    const dt = Math.min(delta / 1000, 0.033);
 
-    if (left) this.player.setAccelerationX(-1100);
-    else if (right) this.player.setAccelerationX(1100);
-    else this.player.setAccelerationX(0);
+    if (grounded) this.lastGroundedAt = now;
+    if (jumpPressed) this.jumpBufferedUntil = now + this.jumpBufferMs;
 
-    if (left) this.player.setFlipX(true);
-    else if (right) this.player.setFlipX(false);
+    const input = (right ? 1 : 0) - (left ? 1 : 0);
+    const accel = grounded ? this.groundAccel : this.airAccel;
+    const currentVx = this.player.body.velocity.x;
 
-    if (jump && this.player.body.blocked.down) {
-      this.player.setVelocityY(-720);
+    if (input !== 0) {
+      const targetVx = input * this.moveSpeed;
+      const nextVx = Phaser.Math.Linear(
+        currentVx,
+        targetVx,
+        Math.min(1, (accel * dt) / Math.max(1, Math.abs(targetVx - currentVx)))
+      );
+      this.player.setVelocityX(nextVx);
+      this.player.setFlipX(input < 0);
+    } else {
+      const decelStep = this.groundDecel * dt;
+      const nextVx = Math.abs(currentVx) <= decelStep
+        ? 0
+        : currentVx - Math.sign(currentVx) * decelStep;
+      this.player.setVelocityX(nextVx);
+    }
+
+    const canCoyoteJump = now - this.lastGroundedAt <= this.coyoteMs;
+    if (this.jumpBufferedUntil >= now && canCoyoteJump) {
+      this.player.setVelocityY(this.jumpVelocity);
+      this.jumpBufferedUntil = -Infinity;
+      this.lastGroundedAt = -Infinity;
+    }
+
+    if (!jumpHeld && this.player.body.velocity.y < -260) {
+      this.player.setVelocityY(-260);
     }
 
     this.updatePlayerVisual();
@@ -590,7 +628,7 @@ const config = {
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { y: 1800 },
+      gravity: { y: 2200 },
       debug: false
     }
   },
