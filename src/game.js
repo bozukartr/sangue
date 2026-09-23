@@ -24,7 +24,7 @@ class BootScene extends Phaser.Scene {
   create() {
     this.makeTextures();
     document.body.classList.add('ready');
-    this.scene.start('intro');
+    this.scene.start('menu');
   }
 
   makeTextures() {
@@ -135,6 +135,340 @@ class BootScene extends Phaser.Scene {
   }
 }
 
+
+class MenuScene extends Phaser.Scene {
+  constructor() { super('menu'); }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#171216');
+    this.menuIndex = 0;
+    this.panelOpen = false;
+    this.saveKey = 'sangue-save-v1';
+    this.settingsKey = 'sangue-settings-v1';
+    this.saveData = this.readSave();
+    this.settings = this.readSettings();
+
+    this.createBackdrop();
+    this.createMenu();
+    this.createFooter();
+    this.createRain();
+
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.keys = this.input.keyboard.addKeys('W,S,ENTER,ESC,SPACE');
+
+    this.cameras.main.fadeIn(450, 16, 13, 13);
+  }
+
+  createBackdrop() {
+    this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x1b1519);
+
+    this.add.circle(1000, 115, 58, 0xd9c7a7, 0.25);
+    this.add.rectangle(0, 520, GAME_W, 200, 0x211a1d).setOrigin(0);
+
+    for (let i = 0; i < 13; i++) {
+      const x = 500 + i * 78;
+      const h = Phaser.Math.Between(170, 310);
+      const w = Phaser.Math.Between(70, 110);
+      this.add.rectangle(x, 540 - h / 2, w, h, i % 2 ? 0x2f272b : 0x382d31).setOrigin(0, 0.5);
+      if (i % 2 === 0) {
+        this.add.rectangle(x + 20, 450, 12, 18, 0xcfa968, 0.22);
+      }
+    }
+
+    this.add.rectangle(640, 628, 1280, 95, 0x100d0d, 0.9);
+
+    this.neon = this.add.text(930, 278, 'BAR ARISEL', {
+      fontFamily: 'Courier New',
+      fontStyle: 'bold',
+      fontSize: '31px',
+      color: '#b99a58'
+    }).setOrigin(0.5).setAngle(-2).setAlpha(0.68);
+
+    this.tweens.add({
+      targets: this.neon,
+      alpha: { from: 0.45, to: 0.82 },
+      duration: 1150,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.inOut'
+    });
+
+    this.add.rectangle(765, 360, 255, 150, 0x23191c, 0.92);
+    this.add.rectangle(765, 430, 210, 14, 0x5d463a);
+    this.add.rectangle(765, 448, 170, 10, 0x3d302b);
+
+    const silhouette = this.add.image(815, 446, 'gianlico-idle')
+      .setScale(4.5)
+      .setTint(0x111111)
+      .setAlpha(0.7);
+    silhouette.setOrigin(0.5, 1);
+
+    this.add.rectangle(430, GAME_H / 2, 470, GAME_H, 0x0b0909, 0.82).setOrigin(0.5);
+    this.add.rectangle(468, GAME_H / 2, 2, GAME_H - 90, palette.wine, 0.65);
+  }
+
+  createMenu() {
+    this.add.text(70, 80, 'SANGUE', {
+      fontFamily: 'Courier New',
+      fontStyle: 'bold',
+      fontSize: '74px',
+      color: '#efe4d1'
+    }).setShadow(4, 6, '#4d1719', 0, true, true);
+
+    this.add.text(74, 158, 'ROMA · 1980', {
+      fontFamily: 'Courier New',
+      fontSize: '15px',
+      color: '#b99a58'
+    });
+
+    this.add.text(74, 196, 'Una storia di sangue, debiti e famiglia.', {
+      fontFamily: 'Courier New',
+      fontSize: '13px',
+      color: '#8e8378'
+    });
+
+    this.menuItems = [
+      { label: 'DEVAM ET', action: () => this.continueGame(), disabled: !this.saveData },
+      { label: 'YENİ OYUN', action: () => this.newGame() },
+      { label: 'LOAD / SAVE', action: () => this.openSavePanel() },
+      { label: 'AYARLAR', action: () => this.openSettingsPanel() }
+    ];
+
+    this.menuTexts = this.menuItems.map((item, index) => {
+      const text = this.add.text(82, 300 + index * 62, item.label, {
+        fontFamily: 'Courier New',
+        fontStyle: 'bold',
+        fontSize: '24px',
+        color: item.disabled ? '#4f4846' : '#d8cdbd',
+        backgroundColor: '#00000000',
+        padding: { x: 10, y: 8 }
+      }).setInteractive({ useHandCursor: !item.disabled });
+
+      text.on('pointerover', () => {
+        if (!item.disabled && !this.panelOpen) {
+          this.menuIndex = index;
+          this.refreshSelection();
+        }
+      });
+      text.on('pointerdown', () => {
+        if (!item.disabled && !this.panelOpen) {
+          this.menuIndex = index;
+          this.activateSelection();
+        }
+      });
+      return text;
+    });
+
+    this.selector = this.add.text(55, 305, '›', {
+      fontFamily: 'Courier New',
+      fontStyle: 'bold',
+      fontSize: '28px',
+      color: '#9c2b2f'
+    });
+
+    this.refreshSelection();
+  }
+
+  createFooter() {
+    this.add.text(74, 654, 'W/S veya ↑/↓ seç · ENTER onayla · ESC geri', {
+      fontFamily: 'Courier New',
+      fontSize: '12px',
+      color: '#766d67'
+    });
+
+    this.add.text(1188, 654, 'v0.1', {
+      fontFamily: 'Courier New',
+      fontSize: '11px',
+      color: '#5d5550'
+    }).setOrigin(1, 0);
+  }
+
+  createRain() {
+    this.rain = [];
+    for (let i = 0; i < 75; i++) {
+      const line = this.add.rectangle(
+        Phaser.Math.Between(0, GAME_W),
+        Phaser.Math.Between(0, GAME_H),
+        2,
+        Phaser.Math.Between(9, 20),
+        0xb8beca,
+        Phaser.Math.FloatBetween(0.06, 0.18)
+      ).setAngle(12);
+      this.rain.push(line);
+    }
+  }
+
+  update(_time, delta) {
+    this.rain.forEach((drop) => {
+      drop.y += delta * 0.42;
+      drop.x -= delta * 0.07;
+      if (drop.y > GAME_H + 20) {
+        drop.y = -20;
+        drop.x = Phaser.Math.Between(0, GAME_W);
+      }
+    });
+
+    if (this.panelOpen) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) this.closePanel();
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.cursors.down) || Phaser.Input.Keyboard.JustDown(this.keys.S)) {
+      this.moveSelection(1);
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.W)) {
+      this.moveSelection(-1);
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ENTER) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
+      this.activateSelection();
+    }
+  }
+
+  moveSelection(direction) {
+    let next = this.menuIndex;
+    do {
+      next = Phaser.Math.Wrap(next + direction, 0, this.menuItems.length);
+    } while (this.menuItems[next].disabled && next !== this.menuIndex);
+    this.menuIndex = next;
+    this.refreshSelection();
+  }
+
+  refreshSelection() {
+    this.menuTexts.forEach((text, index) => {
+      const item = this.menuItems[index];
+      text.setColor(item.disabled ? '#4f4846' : index === this.menuIndex ? '#efe4d1' : '#b3a89d');
+      text.setBackgroundColor(index === this.menuIndex && !item.disabled ? '#2b171acc' : '#00000000');
+    });
+    this.selector.setY(305 + this.menuIndex * 62).setVisible(!this.menuItems[this.menuIndex].disabled);
+  }
+
+  activateSelection() {
+    const item = this.menuItems[this.menuIndex];
+    if (!item || item.disabled) return;
+    item.action();
+  }
+
+  newGame() {
+    localStorage.removeItem(this.saveKey);
+    this.cameras.main.fadeOut(350, 16, 13, 13);
+    this.time.delayedCall(370, () => this.scene.start('intro'));
+  }
+
+  continueGame() {
+    if (!this.saveData) return;
+    this.cameras.main.fadeOut(350, 16, 13, 13);
+    this.time.delayedCall(370, () => this.scene.start('rome', { saveData: this.saveData }));
+  }
+
+  openSavePanel() {
+    const body = this.saveData
+      ? 'Kayıt bulundu.\n\nBölüm: ' + (this.saveData.chapter || 'Capitolo I') + '\nKonum: ' + (this.saveData.location || 'Trastevere')
+      : 'Henüz kayıt bulunmuyor.\n\nOyuna başladıktan sonra kayıt oluşturabilirsin.';
+    this.openPanel('LOAD / SAVE', body, this.saveData ? 'ENTER: Yükle   ·   ESC: Geri' : 'ESC: Geri', () => this.continueGame());
+  }
+
+  openSettingsPanel() {
+    const rainText = this.settings.rain !== false ? 'AÇIK' : 'KAPALI';
+    const scanlineText = this.settings.scanlines !== false ? 'AÇIK' : 'KAPALI';
+    this.openPanel(
+      'AYARLAR',
+      'Yağmur: ' + rainText + '\nScanline efekti: ' + scanlineText + '\n\nAyarlar altyapısı hazır. Ses ve görüntü seçenekleri sonraki adımda genişletilecek.',
+      'R: Yağmur   ·   T: Scanline   ·   ESC: Geri'
+    );
+
+    this.panelKeyHandler = (event) => {
+      if (!this.panelOpen) return;
+      if (event.code === 'KeyR') {
+        this.settings.rain = this.settings.rain === false;
+        this.persistSettings();
+        this.closePanel();
+        this.openSettingsPanel();
+      }
+      if (event.code === 'KeyT') {
+        this.settings.scanlines = this.settings.scanlines === false;
+        this.persistSettings();
+        document.querySelector('.scanlines')?.style.setProperty('display', this.settings.scanlines === false ? 'none' : 'block');
+        this.closePanel();
+        this.openSettingsPanel();
+      }
+    };
+    this.input.keyboard.on('keydown', this.panelKeyHandler);
+  }
+
+  openPanel(title, body, footer, onEnter = null) {
+    this.panelOpen = true;
+    this.panelEnter = onEnter;
+
+    this.panel = this.add.container(0, 0).setDepth(120);
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x080606, 0.72);
+    const box = this.add.rectangle(830, 345, 560, 330, 0x130f10, 0.98);
+    box.setStrokeStyle(2, palette.wine, 0.8);
+
+    const titleText = this.add.text(590, 220, title, {
+      fontFamily: 'Courier New',
+      fontStyle: 'bold',
+      fontSize: '28px',
+      color: '#efe4d1'
+    });
+
+    const bodyText = this.add.text(590, 278, body, {
+      fontFamily: 'Courier New',
+      fontSize: '17px',
+      color: '#b8ada1',
+      lineSpacing: 10,
+      wordWrap: { width: 480 }
+    });
+
+    const footerText = this.add.text(590, 456, footer, {
+      fontFamily: 'Courier New',
+      fontSize: '12px',
+      color: '#7f746c'
+    });
+
+    this.panel.add([dim, box, titleText, bodyText, footerText]);
+
+    this.panelEnterHandler = () => {
+      if (this.panelOpen && this.panelEnter) this.panelEnter();
+    };
+    this.input.keyboard.on('keydown-ENTER', this.panelEnterHandler);
+  }
+
+  closePanel() {
+    if (!this.panelOpen) return;
+    this.panelOpen = false;
+    this.panel?.destroy(true);
+    this.panel = null;
+    if (this.panelEnterHandler) {
+      this.input.keyboard.off('keydown-ENTER', this.panelEnterHandler);
+      this.panelEnterHandler = null;
+    }
+    if (this.panelKeyHandler) {
+      this.input.keyboard.off('keydown', this.panelKeyHandler);
+      this.panelKeyHandler = null;
+    }
+  }
+
+  readSave() {
+    try {
+      return JSON.parse(localStorage.getItem(this.saveKey) || 'null');
+    } catch {
+      return null;
+    }
+  }
+
+  readSettings() {
+    try {
+      return JSON.parse(localStorage.getItem(this.settingsKey) || '{}') || {};
+    } catch {
+      return {};
+    }
+  }
+
+  persistSettings() {
+    localStorage.setItem(this.settingsKey, JSON.stringify(this.settings));
+  }
+}
+
 class IntroScene extends Phaser.Scene {
   constructor() { super('intro'); }
 
@@ -223,6 +557,10 @@ class IntroScene extends Phaser.Scene {
 class RomeScene extends Phaser.Scene {
   constructor() { super('rome'); }
 
+  init(data) {
+    this.loadedSave = data?.saveData || null;
+  }
+
   create() {
     this.worldWidth = 4200;
     this.cameras.main.setBounds(0, 0, this.worldWidth, GAME_H);
@@ -239,10 +577,22 @@ class RomeScene extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('A,D,W,S,E,SPACE');
 
-    this.missionStage = 0;
-    this.hasLedger = false;
+    this.missionStage = this.loadedSave?.missionStage ?? 0;
+    this.hasLedger = this.loadedSave?.hasLedger ?? false;
     this.dialogueOpen = false;
-    this.setObjective('Borge’u bul · Trastevere');
+    this.setObjective(
+      this.missionStage === 0 ? 'Borge’u bul · Trastevere' :
+      this.missionStage === 1 ? 'Magazzino 17’ye ulaş · kırmızı defteri al' :
+      this.missionStage === 2 ? 'Borge’a dön · defteri teslim et' :
+      'Görev tamamlandı · Il Primo Passo'
+    );
+
+    if (this.loadedSave?.playerX) {
+      this.player.setPosition(this.loadedSave.playerX, this.loadedSave.playerY || 588);
+    }
+    if (this.hasLedger) {
+      this.ledger.setActive(false).setVisible(false);
+    }
 
     this.cameras.main.startFollow(this.player, true, 0.14, 0.14, -220, 35);
     this.cameras.main.fadeIn(450, 16, 13, 13);
@@ -587,6 +937,7 @@ class RomeScene extends Phaser.Scene {
       ], () => {
         this.missionStage = 1;
         this.setObjective('Magazzino 17’ye ulaş · kırmızı defteri al');
+        this.saveGame();
       });
     } else if (this.missionStage === 1) {
       this.startDialogue([
@@ -602,6 +953,7 @@ class RomeScene extends Phaser.Scene {
       ], () => {
         this.missionStage = 3;
         this.setObjective('Görev tamamlandı · Il Primo Passo');
+        this.saveGame();
         this.showChapter('MISSIONE COMPLETA', 'IL PRIMO PASSO');
       });
     }
@@ -613,6 +965,7 @@ class RomeScene extends Phaser.Scene {
     this.missionStage = 2;
     this.ledger.setActive(false).setVisible(false);
     this.setObjective('Borge’a dön · defteri teslim et');
+    this.saveGame();
     this.cameras.main.flash(180, 183, 154, 88, false);
   }
 
@@ -644,6 +997,19 @@ class RomeScene extends Phaser.Scene {
 
   setObjective(text) {
     if (this.objectiveText) this.objectiveText.setText(text);
+  }
+
+  saveGame() {
+    const saveData = {
+      chapter: 'Capitolo I',
+      location: 'Trastevere',
+      missionStage: this.missionStage,
+      hasLedger: this.hasLedger,
+      playerX: Math.round(this.player?.x || 160),
+      playerY: Math.round(this.player?.y || 588),
+      savedAt: Date.now()
+    };
+    localStorage.setItem('sangue-save-v1', JSON.stringify(saveData));
   }
 
   showChapter(kicker, title) {
@@ -692,7 +1058,7 @@ const config = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  scene: [BootScene, IntroScene, RomeScene]
+  scene: [BootScene, MenuScene, IntroScene, RomeScene]
 };
 
 new Phaser.Game(config);
