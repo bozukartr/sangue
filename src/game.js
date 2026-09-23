@@ -122,8 +122,14 @@ class IntroScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor('#100d0d');
-    this.input.keyboard.once('keydown-SPACE', () => this.nextCard(true));
-    this.input.once('pointerdown', () => this.nextCard(true));
+    this.advanceIntro = () => this.nextCard();
+    this.input.keyboard.on('keydown-SPACE', this.advanceIntro);
+    this.input.on('pointerdown', this.advanceIntro);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard.off('keydown-SPACE', this.advanceIntro);
+      this.input.off('pointerdown', this.advanceIntro);
+    });
 
     this.cards = [
       {
@@ -164,8 +170,8 @@ class IntroScene extends Phaser.Scene {
     this.nextCard();
   }
 
-  nextCard(force = false) {
-    if (this.transitioning && !force) return;
+  nextCard() {
+    if (this.transitioning) return;
     this.cardIndex++;
 
     if (this.cardIndex >= this.cards.length) {
