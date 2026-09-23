@@ -580,6 +580,7 @@ class RomeScene extends Phaser.Scene {
     this.missionStage = this.loadedSave?.missionStage ?? 0;
     this.hasLedger = this.loadedSave?.hasLedger ?? false;
     this.dialogueOpen = false;
+    this.crouchHintShown = false;
     this.setObjective(
       this.missionStage === 0 ? 'Borge’u bul · Trastevere' :
       this.missionStage === 1 ? 'Magazzino 17’ye ulaş · kırmızı defteri al' :
@@ -655,17 +656,16 @@ class RomeScene extends Phaser.Scene {
     // Sokak seviyesinde doğal traversal: alçak geçit, basamak ve depo rampası.
     this.streetGeometry = [];
 
-    const lowPass = this.add.rectangle(2230, 555, 250, 34, 0x302b28).setDepth(4);
+    // A lowered street lintel leaves room to crouch beneath it. Its supports
+    // are part of the background wall, so they do not seal off the pavement.
+    const lowPass = this.add.rectangle(2230, 577, 250, 34, 0x302b28).setDepth(4);
     this.physics.add.existing(lowPass, true);
     this.streetGeometry.push(lowPass);
 
-    const sidePosts = [
-      this.add.rectangle(2112, 590, 18, 120, 0x3d3632).setDepth(4),
-      this.add.rectangle(2348, 590, 18, 120, 0x3d3632).setDepth(4)
-    ];
-    sidePosts.forEach((post) => {
-      this.physics.add.existing(post, true);
-      this.streetGeometry.push(post);
+    this.add.rectangle(2230, 560, 250, 4, 0x5b4a40).setDepth(5);
+    this.add.rectangle(2230, 592, 250, 3, 0x171313).setDepth(5);
+    [2096, 2364].forEach((x) => {
+      this.add.rectangle(x, 590, 18, 120, 0x3d3632).setDepth(3);
     });
 
     const steps = [
@@ -766,6 +766,11 @@ class RomeScene extends Phaser.Scene {
       backgroundColor: '#171313ee', padding: { x: 13, y: 8 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(60).setVisible(false);
 
+    this.traversalHint = this.add.text(GAME_W / 2, GAME_H - 136, 'ALÇAK GEÇİT  ·  S / ↓ ile çömel', {
+      fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '15px', color: '#e7ddca',
+      backgroundColor: '#171313ee', padding: { x: 13, y: 8 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(61).setVisible(false).setAlpha(0);
+
     this.dialogueBox = this.add.container(0, 0).setScrollFactor(0).setDepth(80).setVisible(false);
     const box = this.add.rectangle(80, 494, GAME_W - 160, 170, 0x100d0d, 0.94).setOrigin(0);
     box.setStrokeStyle(2, palette.gold, 0.55);
@@ -821,7 +826,8 @@ class RomeScene extends Phaser.Scene {
     if (grounded) this.lastGroundedAt = now;
     if (jumpPressed && !crouchHeld) this.jumpBufferedUntil = now + this.jumpBufferMs;
 
-    const shouldCrouch = grounded && crouchHeld;
+    const shouldCrouch = (grounded && crouchHeld) ||
+      (this.isCrouching && !this.canStandUp());
     if (shouldCrouch !== this.isCrouching) {
       this.isCrouching = shouldCrouch;
       if (this.isCrouching) {
@@ -866,6 +872,31 @@ class RomeScene extends Phaser.Scene {
 
     this.updatePlayerVisual();
     this.updateInteractions();
+    this.updateTraversalHint();
+  }
+
+  canStandUp() {
+    const body = this.player.body;
+    const headroom = 10 * Math.abs(this.player.scaleY);
+    // Standing and crouching share the same foot position; only the upper
+    // ten sprite pixels need checking before restoring the taller body.
+    return this.physics.overlapRect(
+      body.x + 1, body.y - headroom, body.width - 2, headroom - 1, false, true
+    ).length === 0;
+  }
+
+  updateTraversalHint() {
+    if (this.crouchHintShown || Math.abs(this.player.x - 2230) > 390) return;
+    this.crouchHintShown = true;
+    this.traversalHint.setVisible(true);
+    this.tweens.add({
+      targets: this.traversalHint,
+      alpha: 1,
+      duration: 180,
+      hold: 3000,
+      yoyo: true,
+      onComplete: () => this.traversalHint.setVisible(false)
+    });
   }
 
   updateRain(delta) {
