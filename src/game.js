@@ -303,14 +303,20 @@ class RomeScene extends Phaser.Scene {
     });
 
     // Sokak seviyesinde doğal traversal: alçak geçit, basamak ve depo rampası.
+    this.streetGeometry = [];
+
     const lowPass = this.add.rectangle(2230, 555, 250, 34, 0x302b28).setDepth(4);
     this.physics.add.existing(lowPass, true);
+    this.streetGeometry.push(lowPass);
 
     const sidePosts = [
       this.add.rectangle(2112, 590, 18, 120, 0x3d3632).setDepth(4),
       this.add.rectangle(2348, 590, 18, 120, 0x3d3632).setDepth(4)
     ];
-    sidePosts.forEach((post) => this.physics.add.existing(post, true));
+    sidePosts.forEach((post) => {
+      this.physics.add.existing(post, true);
+      this.streetGeometry.push(post);
+    });
 
     const steps = [
       [2620, 626, 80, 32],
@@ -320,10 +326,8 @@ class RomeScene extends Phaser.Scene {
     steps.forEach(([x, y, w, h]) => {
       const step = this.add.rectangle(x, y, w, h, 0x4d4540).setDepth(3);
       this.physics.add.existing(step, true);
+      this.streetGeometry.push(step);
     });
-
-    this.physics.add.collider(this.player, lowPass);
-    sidePosts.forEach((post) => this.physics.add.collider(this.player, post));
 
     for (let x = 250; x < this.worldWidth; x += 460) {
       this.add.image(x, 606, 'lamp').setOrigin(0.5, 1).setDepth(2);
@@ -364,6 +368,9 @@ class RomeScene extends Phaser.Scene {
     this.isCrouching = false;
 
     this.physics.add.collider(this.player, this.platforms);
+    if (this.streetGeometry) {
+      this.streetGeometry.forEach((object) => this.physics.add.collider(this.player, object));
+    }
   }
 
   createBorge() {
