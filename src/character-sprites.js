@@ -170,8 +170,16 @@ function makeSheet(scene, key, look, states) {
       ctx.restore();
     }
   }
-  const source = scene.textures.addCanvas(`${key}-source`, canvas);
-  scene.textures.addSpriteSheet(key, source, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+  // A CanvasTexture is already registered under this key. Give it numeric
+  // frames directly; addSpriteSheet does not create a second named texture
+  // when its source is an existing Phaser Texture.
+  const texture = scene.textures.addCanvas(key, canvas);
+  if (!texture) throw new Error(`Cannot register character texture: ${key}`);
+  for (let i = 0; i < count; i++) {
+    if (!texture.add(i, 0, i * FRAME_W, 0, FRAME_W, FRAME_H)) {
+      throw new Error(`Cannot register frame ${i} in ${key}`);
+    }
+  }
 }
 
 export function installCharacterSprites(scene) {
