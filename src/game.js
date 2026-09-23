@@ -1,3 +1,5 @@
+import { installCharacterSprites } from './character-sprites.js';
+
 const GAME_W = 1280;
 const GAME_H = 720;
 
@@ -28,72 +30,7 @@ class BootScene extends Phaser.Scene {
   }
 
   makeTextures() {
-    const makeCharacter = (key, pose, coat = palette.suit, accent = palette.cream) => {
-      const g = this.add.graphics();
-
-      g.fillStyle(0x000000, 0.25);
-      g.fillRect(5, 29, 14, 3);
-
-      g.fillStyle(palette.skin);
-      g.fillRect(8, 3, 8, 8);
-      g.fillStyle(0x3a2722);
-      g.fillRect(7, 2, 10, 3);
-      g.fillRect(7, 5, 2, 4);
-
-      g.fillStyle(accent);
-      g.fillRect(9, 11, 6, 4);
-
-      g.fillStyle(coat);
-      g.fillRect(6, 14, 12, 10);
-      g.fillRect(4, 15, 3, 8);
-      g.fillRect(17, 15, 3, 8);
-
-      g.fillStyle(palette.black);
-      if (pose === 'crouch') {
-        g.clear();
-        g.fillStyle(0x000000, 0.25);
-        g.fillRect(4, 25, 16, 3);
-        g.fillStyle(palette.skin);
-        g.fillRect(9, 7, 8, 7);
-        g.fillStyle(0x3a2722);
-        g.fillRect(8, 6, 10, 3);
-        g.fillRect(8, 9, 2, 4);
-        g.fillStyle(accent);
-        g.fillRect(10, 14, 6, 3);
-        g.fillStyle(coat);
-        g.fillRect(6, 17, 13, 6);
-        g.fillRect(4, 18, 4, 4);
-        g.fillStyle(palette.black);
-        g.fillRect(7, 23, 6, 4);
-        g.fillRect(13, 22, 7, 5);
-      } else if (pose === 'runA') {
-        g.fillRect(7, 24, 4, 6);
-        g.fillRect(14, 24, 4, 4);
-        g.fillRect(16, 28, 5, 3);
-      } else if (pose === 'runB') {
-        g.fillRect(7, 24, 4, 4);
-        g.fillRect(4, 28, 7, 3);
-        g.fillRect(14, 24, 4, 6);
-      } else if (pose === 'jump') {
-        g.fillRect(6, 24, 5, 4);
-        g.fillRect(14, 24, 5, 4);
-        g.fillRect(4, 27, 7, 3);
-        g.fillRect(14, 27, 7, 3);
-      } else {
-        g.fillRect(7, 24, 4, 7);
-        g.fillRect(14, 24, 4, 7);
-      }
-
-      g.generateTexture(key, 24, 32);
-      g.destroy();
-    };
-
-    makeCharacter('gianlico-idle', 'idle');
-    makeCharacter('gianlico-run-a', 'runA');
-    makeCharacter('gianlico-run-b', 'runB');
-    makeCharacter('gianlico-jump', 'jump');
-    makeCharacter('gianlico-crouch', 'crouch');
-    makeCharacter('borge', 'idle', 0x292126, palette.gold);
+    installCharacterSprites(this);
 
     const platform = this.add.graphics();
     platform.fillStyle(palette.stoneDark);
@@ -197,7 +134,7 @@ class MenuScene extends Phaser.Scene {
     this.add.rectangle(765, 430, 210, 14, 0x5d463a);
     this.add.rectangle(765, 448, 170, 10, 0x3d302b);
 
-    const silhouette = this.add.image(815, 446, 'gianlico-idle')
+    const silhouette = this.add.image(815, 446, 'gianlico-sheet', 0)
       .setScale(4.5)
       .setTint(0x111111)
       .setAlpha(0.7);
@@ -696,10 +633,12 @@ class RomeScene extends Phaser.Scene {
   }
 
   createPlayer() {
-    this.player = this.physics.add.sprite(160, 588, 'gianlico-idle')
+    this.player = this.physics.add.sprite(160, 588, 'gianlico-sheet', 0)
       .setScale(2.2)
       .setDepth(8)
       .setCollideWorldBounds(true);
+
+    this.player.play('gianlico-idle');
 
     this.player.body.setSize(15, 28).setOffset(4, 3);
     this.player.body.setMaxVelocity(300, 1000);
@@ -724,7 +663,9 @@ class RomeScene extends Phaser.Scene {
   }
 
   createBorge() {
-    this.borge = this.physics.add.staticSprite(1170, 584, 'borge').setScale(2.2).setDepth(7);
+    this.borge = this.physics.add.staticSprite(1170, 584, 'borge-sheet', 0)
+      .setScale(2.2).setDepth(7);
+    this.borge.play('borge-idle');
     this.borge.nameLabel = this.add.text(1170, 538, 'BORGE', {
       fontFamily: 'Courier New', fontSize: '12px', color: '#b99a58',
       backgroundColor: '#171313', padding: { x: 5, y: 3 }
@@ -917,21 +858,28 @@ class RomeScene extends Phaser.Scene {
     const vy = this.player.body.velocity.y;
 
     if (this.isCrouching) {
-      this.player.setTexture('gianlico-crouch');
+      if (Math.abs(vx) > 18) {
+        this.player.play('gianlico-crouch-walk', true);
+      } else {
+        this.player.anims.stop();
+        this.player.setFrame(12);
+      }
       return;
     }
 
-    if (!this.player.body.blocked.down) {
-      this.player.setTexture('gianlico-jump');
+    if (!this.player.body.blocked.down || vy < -10) {
+      // Physics drives the vertical position; the pose follows ascent, apex
+      // and descent so a short jump cannot get stuck showing a takeoff frame.
+      const frame = vy < -280 ? 18 : vy < 180 ? 19 : vy < 540 ? 20 : 21;
+      this.player.anims.stop();
+      this.player.setFrame(frame);
       return;
     }
 
     if (Math.abs(vx) > 35) {
-      const frame = Math.floor(this.time.now / 130) % 2;
-      this.player.setTexture(frame ? 'gianlico-run-a' : 'gianlico-run-b');
+      this.player.play('gianlico-walk', true);
     } else {
-      this.player.setTexture('gianlico-idle');
-      this.player.y += Math.sin(this.time.now / 220) * 0.03;
+      this.player.play('gianlico-idle', true);
     }
   }
 
@@ -1002,6 +950,8 @@ class RomeScene extends Phaser.Scene {
 
   startDialogue(lines, onComplete) {
     this.dialogueOpen = true;
+    this.player.setVelocityX(0);
+    this.updatePlayerVisual();
     this.currentDialogue = lines;
     this.dialogueIndex = -1;
     this.dialogueDone = onComplete;
@@ -1093,3 +1043,4 @@ const config = {
 };
 
 new Phaser.Game(config);
+
