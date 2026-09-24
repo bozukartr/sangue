@@ -1,7 +1,12 @@
 import { installCharacterSprites } from './character-sprites.js';
+import { SAVE_KEY, STAGE, chapterForStage, normalizeSave, objectiveForStage, writeSave } from './story.js';
+import { ApartmentScene } from './scenes/apartment.js';
 
 const GAME_W = 1280;
 const GAME_H = 720;
+const STREET_GROUND_TOP = 642;
+const CHARACTER_SCALE = 2.2;
+const STREET_CHARACTER_Y = STREET_GROUND_TOP - 16 * CHARACTER_SCALE;
 
 const palette = {
   night: 0x18141b,
@@ -80,7 +85,7 @@ class MenuScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#171216');
     this.menuIndex = 0;
     this.panelOpen = false;
-    this.saveKey = 'sangue-save-v1';
+    this.saveKey = SAVE_KEY;
     this.settingsKey = 'sangue-settings-v1';
     this.saveData = this.readSave();
     this.settings = this.readSettings();
@@ -294,7 +299,7 @@ class MenuScene extends Phaser.Scene {
   continueGame() {
     if (!this.saveData) return;
     this.cameras.main.fadeOut(350, 16, 13, 13);
-    this.time.delayedCall(370, () => this.scene.start('rome', { saveData: this.saveData }));
+    this.time.delayedCall(370, () => this.scene.start(this.saveData.scene, { saveData: this.saveData }));
   }
 
   openSavePanel() {
@@ -387,7 +392,7 @@ class MenuScene extends Phaser.Scene {
 
   readSave() {
     try {
-      return JSON.parse(localStorage.getItem(this.saveKey) || 'null');
+      return normalizeSave(JSON.parse(localStorage.getItem(this.saveKey) || 'null'));
     } catch {
       return null;
     }
@@ -495,7 +500,7 @@ class RomeScene extends Phaser.Scene {
   constructor() { super('rome'); }
 
   init(data) {
-    this.loadedSave = data?.saveData || null;
+    this.loadedSave = normalizeSave(data?.saveData);
   }
 
   create() {
@@ -507,6 +512,7 @@ class RomeScene extends Phaser.Scene {
     this.createWorld();
     this.createPlayer();
     this.createBorge();
+    this.createElena();
     this.createLedger();
     this.createHud();
     this.createRain();
@@ -514,19 +520,17 @@ class RomeScene extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('A,D,W,S,E,SPACE');
 
-    this.missionStage = this.loadedSave?.missionStage ?? 0;
+    this.missionStage = this.loadedSave?.missionStage ?? STAGE.FIND_BORGE;
     this.hasLedger = this.loadedSave?.hasLedger ?? false;
+    this.evidence = this.loadedSave?.evidence || [];
     this.dialogueOpen = false;
+    this.transitioningScene = false;
     this.crouchHintShown = false;
-    this.setObjective(
-      this.missionStage === 0 ? 'Borge’u bul · Trastevere' :
-      this.missionStage === 1 ? 'Magazzino 17’ye ulaş · kırmızı defteri al' :
-      this.missionStage === 2 ? 'Borge’a dön · defteri teslim et' :
-      'Görev tamamlandı · Il Primo Passo'
-    );
+    if (this.missionStage >= STAGE.CURRENT_END) this.cabinetDoor.setFillStyle(0x1a1819);
+    this.setObjective(objectiveForStage(this.missionStage));
 
-    if (this.loadedSave?.playerX) {
-      this.player.setPosition(this.loadedSave.playerX, this.loadedSave.playerY || 588);
+    if (Number.isFinite(this.loadedSave?.playerX)) {
+      this.player.setPosition(this.loadedSave.playerX, this.loadedSave.playerY || STREET_CHARACTER_Y);
     }
     if (this.hasLedger) {
       this.ledger.setActive(false).setVisible(false);
@@ -536,7 +540,8 @@ class RomeScene extends Phaser.Scene {
     this.cameras.main.fadeIn(450, 16, 13, 13);
 
     this.time.delayedCall(550, () => {
-      this.showChapter('CAPITOLO I', 'IL PRIMO PASSO');
+      const chapter = chapterForStage(this.missionStage);
+      this.showChapter(chapter.number, chapter.title);
     });
   }
 
@@ -574,15 +579,15 @@ class RomeScene extends Phaser.Scene {
   createWorld() {
     this.platforms = this.physics.add.staticGroup();
 
-    const groundY = 650;
+    const groundY = STREET_GROUND_TOP + 8;
     for (let x = 0; x < this.worldWidth; x += 64) {
       this.platforms.create(x + 32, groundY, 'platform').refreshBody();
     }
 
     const streetObstacles = [
-      [720, 610], [752, 610],
-      [1730, 610], [1762, 610],
-      [3010, 610], [3042, 610]
+      [720, 626], [752, 626],
+      [1730, 626], [1762, 626],
+      [3010, 626], [3042, 626]
     ];
 
     streetObstacles.forEach(([x, y]) => {
@@ -607,8 +612,8 @@ class RomeScene extends Phaser.Scene {
 
     const steps = [
       [2620, 626, 80, 32],
-      [2690, 610, 80, 48],
-      [2760, 594, 80, 64]
+      [2690, 618, 80, 48],
+      [2760, 610, 80, 64]
     ];
     steps.forEach(([x, y, w, h]) => {
       const step = this.add.rectangle(x, y, w, h, 0x4d4540).setDepth(3);
@@ -617,24 +622,84 @@ class RomeScene extends Phaser.Scene {
     });
 
     for (let x = 250; x < this.worldWidth; x += 460) {
-      this.add.image(x, 606, 'lamp').setOrigin(0.5, 1).setDepth(2);
-      this.add.circle(x, 568, 42, 0xd7a958, 0.04).setDepth(1);
+      this.add.image(x, STREET_GROUND_TOP, 'lamp').setOrigin(0.5, 1).setDepth(2);
+      this.add.circle(x, STREET_GROUND_TOP - 36, 42, 0xd7a958, 0.04).setDepth(1);
     }
 
-    this.add.text(1070, 596, 'BAR ARISEL', {
+    this.createLandmarks();
+  }
+
+  createLandmarks() {
+    const wall = (x, width, color) => this.add.rectangle(x, 526, width, 232, color).setDepth(1);
+    const window = (x, y, lit = false) => {
+      this.add.rectangle(x, y, 45, 53, 0x15191d).setDepth(2);
+      this.add.rectangle(x, y, 37, 45, lit ? 0x997044 : 0x38363b, lit ? 0.44 : 0.85).setDepth(2);
+      this.add.rectangle(x, y, 3, 49, 0x302c2a).setDepth(3);
+      this.add.rectangle(x, y, 43, 3, 0x302c2a).setDepth(3);
+    };
+
+    wall(360, 330, 0x443a3a);
+    window(266, 485, true);
+    window(455, 485);
+    this.apartmentDoorX = 370;
+    this.add.rectangle(this.apartmentDoorX, 583, 80, 118, 0x252023).setDepth(2);
+    this.add.rectangle(this.apartmentDoorX, 583, 66, 110, 0x4b3431).setDepth(3);
+    this.add.rectangle(394, 589, 5, 5, palette.gold).setDepth(4);
+    this.add.text(307, 509, 'CASA BIANCHI', {
+      fontFamily: 'Courier New', fontSize: '12px', color: '#d2c2aa',
+      backgroundColor: '#241d1f', padding: { x: 6, y: 3 }
+    }).setDepth(4);
+
+    wall(1150, 445, 0x382c30);
+    window(995, 480, true);
+    window(1305, 480, true);
+    this.add.rectangle(1165, 577, 145, 130, 0x1d171b).setDepth(2);
+    this.add.rectangle(1165, 576, 120, 115, 0x593a31).setDepth(3);
+    this.add.rectangle(1165, 557, 92, 63, 0x9a6b43, 0.3).setDepth(4);
+    this.add.text(1063, 437, 'BAR ARISEL', {
       fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '16px', color: '#b99a58',
       backgroundColor: '#24191b', padding: { x: 8, y: 5 }
-    }).setDepth(3);
+    }).setDepth(4);
 
-    this.add.text(3420, 596, 'MAGAZZINO 17', {
+    this.add.rectangle(3235, 522, 260, 8, 0x4a4947).setDepth(3);
+    this.add.rectangle(3130, 578, 7, 120, 0x3e3b3a).setDepth(3);
+    this.add.rectangle(3350, 578, 7, 120, 0x3e3b3a).setDepth(3);
+    this.add.rectangle(3235, 565, 204, 62, 0x71807a, 0.13).setDepth(2);
+    this.add.rectangle(3235, 629, 110, 16, 0x4b3c32).setDepth(3);
+    this.add.text(3141, 530, 'FERMATA TRASTEVERE', {
+      fontFamily: 'Courier New', fontSize: '12px', color: '#e4d8c3',
+      backgroundColor: '#292b2a', padding: { x: 6, y: 3 }
+    }).setDepth(4);
+
+    wall(3670, 690, 0x3b3835);
+    this.add.rectangle(3650, 558, 465, 166, 0x26282a).setDepth(2);
+    for (let y = 490; y < 630; y += 17) {
+      this.add.rectangle(3650, y, 460, 3, 0x474748).setDepth(3);
+    }
+    this.add.text(3494, 452, 'MAGAZZINO 17', {
       fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '16px', color: '#d8c6ab',
       backgroundColor: '#24191b', padding: { x: 8, y: 5 }
-    }).setDepth(3);
+    }).setDepth(4);
+    this.add.rectangle(3730, 625, 88, 34, 0x55443a).setDepth(4);
+    this.add.rectangle(3730, 608, 92, 5, 0x927155).setDepth(5);
+    this.cabinetX = 3910;
+    this.add.rectangle(this.cabinetX, 587, 62, 110, 0x342e2d).setDepth(4);
+    this.cabinetDoor = this.add.rectangle(this.cabinetX, 587, 51, 100, 0x51413a).setDepth(5);
+    this.add.text(this.cabinetX, 560, '31', {
+      fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '16px', color: '#c6ac78'
+    }).setOrigin(0.5).setDepth(6);
+
+    [250, 990, 1510, 2410, 3250, 3900].forEach((x, i) => {
+      this.add.rectangle(x, 647, 105 + (i % 3) * 18, 2, 0xb88a55, 0.22).setDepth(3);
+      this.add.rectangle(x + 22, 653, 70, 1, 0xb88a55, 0.15).setDepth(3);
+    });
   }
 
   createPlayer() {
-    this.player = this.physics.add.sprite(160, 588, 'gianlico-sheet', 0)
-      .setScale(2.2)
+    this.playerShadow = this.add.ellipse(160, STREET_GROUND_TOP - 2, 45, 8, 0x0b090a, 0.45)
+      .setDepth(6);
+    this.player = this.physics.add.sprite(160, STREET_CHARACTER_Y, 'gianlico-sheet', 0)
+      .setScale(CHARACTER_SCALE)
       .setDepth(8)
       .setCollideWorldBounds(true);
 
@@ -663,35 +728,34 @@ class RomeScene extends Phaser.Scene {
   }
 
   createBorge() {
-    this.borge = this.physics.add.staticSprite(1170, 584, 'borge-sheet', 0)
-      .setScale(2.2).setDepth(7);
+    this.add.ellipse(1170, STREET_GROUND_TOP - 2, 45, 8, 0x0b090a, 0.45).setDepth(6);
+    this.borge = this.add.sprite(1170, STREET_CHARACTER_Y, 'borge-sheet', 0)
+      .setScale(CHARACTER_SCALE).setDepth(7);
     this.borge.play('borge-idle');
-    this.borge.nameLabel = this.add.text(1170, 538, 'BORGE', {
+    this.borge.nameLabel = this.add.text(1170, 550, 'BORGE', {
       fontFamily: 'Courier New', fontSize: '12px', color: '#b99a58',
       backgroundColor: '#171313', padding: { x: 5, y: 3 }
     }).setOrigin(0.5).setDepth(9);
   }
 
+  createElena() {
+    this.add.ellipse(3270, STREET_GROUND_TOP - 2, 43, 8, 0x0b090a, 0.4).setDepth(6);
+    this.elena = this.add.sprite(3270, STREET_CHARACTER_Y, 'elena-sheet', 0)
+      .setScale(CHARACTER_SCALE).setDepth(7).play('elena-idle');
+    this.add.text(3270, 550, 'ELENA', {
+      fontFamily: 'Courier New', fontSize: '12px', color: '#c5aa80',
+      backgroundColor: '#171313', padding: { x: 5, y: 3 }
+    }).setOrigin(0.5).setDepth(9);
+  }
+
   createLedger() {
-    this.ledger = this.physics.add.staticImage(3730, 584, 'ledger').setScale(1.7).setDepth(6);
-    this.tweens.add({
-      targets: this.ledger,
-      y: 574,
-      yoyo: true,
-      repeat: -1,
-      duration: 900,
-      ease: 'Sine.inOut'
-    });
+    this.ledger = this.add.image(3730, 585, 'ledger').setScale(1.7).setDepth(6);
   }
 
   createHud() {
     this.objectivePanel = this.add.rectangle(24, 24, 430, 74, 0x100d0d, 0.82)
       .setOrigin(0).setScrollFactor(0).setDepth(50);
     this.objectivePanel.setStrokeStyle(2, palette.wine);
-
-    this.add.text(42, 36, 'OBIETTIVO', {
-      fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '13px', color: '#b99a58'
-    }).setScrollFactor(0).setDepth(51);
 
     this.objectiveText = this.add.text(42, 58, '', {
       fontFamily: 'Courier New', fontSize: '16px', color: '#e7ddca'
@@ -701,6 +765,10 @@ class RomeScene extends Phaser.Scene {
       fontFamily: 'Courier New', fontSize: '13px', color: '#c1b6a7',
       backgroundColor: '#100d0dcc', padding: { x: 10, y: 7 }
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(51);
+
+    this.chapterLabel = this.add.text(42, 35, '', {
+      fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '13px', color: '#b99a58'
+    }).setScrollFactor(0).setDepth(52);
 
     this.prompt = this.add.text(GAME_W / 2, GAME_H - 88, '', {
       fontFamily: 'Courier New', fontStyle: 'bold', fontSize: '15px', color: '#e7ddca',
@@ -746,6 +814,10 @@ class RomeScene extends Phaser.Scene {
     if (!this.player) return;
 
     this.updateRain(delta);
+    this.playerShadow.x = this.player.x;
+    const heightAboveStreet = Math.max(0, STREET_CHARACTER_Y - this.player.y);
+    this.playerShadow.setScale(Math.max(0.55, 1 - heightAboveStreet / 450));
+    this.playerShadow.setAlpha(Math.max(0.16, 0.45 - heightAboveStreet / 700));
 
     if (this.dialogueOpen) {
       this.player.setVelocityX(0);
@@ -892,13 +964,35 @@ class RomeScene extends Phaser.Scene {
       this.player.x, this.player.y, this.ledger.x, this.ledger.y
     ) < 95;
 
+    const nearHome = Math.abs(this.player.x - this.apartmentDoorX) < 75;
+    const nearElena = Math.abs(this.player.x - this.elena.x) < 85;
+    const nearCabinet = Math.abs(this.player.x - this.cabinetX) < 80;
+
+    if (nearHome && this.missionStage >= STAGE.GO_HOME && this.missionStage <= STAGE.MEET_ELENA) {
+      this.prompt.setText('[ E ]  Bianchi dairesine gir').setVisible(true);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.enterApartment();
+      return;
+    }
+
+    if (nearElena && this.missionStage === STAGE.MEET_ELENA) {
+      this.prompt.setText('[ E ]  Elena ile konuş').setVisible(true);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.interactElena();
+      return;
+    }
+
+    if (nearCabinet && this.missionStage === STAGE.OPEN_CABINET) {
+      this.prompt.setText('[ E ]  31 numaralı dolabı aç').setVisible(true);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.openCabinet();
+      return;
+    }
+
     if (nearBorge) {
       this.prompt.setText('[ E ]  Borge ile konuş').setVisible(true);
       if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.interactBorge();
       return;
     }
 
-    if (nearLedger) {
+    if (nearLedger && this.missionStage === STAGE.FIND_LEDGER) {
       this.prompt.setText('[ E ]  Defteri al').setVisible(true);
       if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.takeLedger();
       return;
@@ -908,44 +1002,106 @@ class RomeScene extends Phaser.Scene {
   }
 
   interactBorge() {
-    if (this.missionStage === 0) {
+    if (this.missionStage === STAGE.FIND_BORGE) {
       this.startDialogue([
-        ['BORGE', 'Babanın öfkesi sende de var. Ama öfke, Roma’da adamı yalnızca mezara daha hızlı götürür.'],
-        ['GIANLICO', 'Cranier’in adını biliyorum. Bana geri kalanını söyle.'],
-        ['BORGE', 'Önce Magazzino 17’ye git. Kırmızı bir hesap defteri var. Onu bana getir. Sonra konuşuruz.']
+        ['GIANLICO', 'Cenazede herkes Cranier’ın adını söyledi. Sen neden söylemedin?'],
+        ['BORGE', 'Cenazede konuşmak kolay. Babanın ölümüne dair elimizde yalnızca eksik bir hesap var.'],
+        ['BORGE', 'Magazzino 17’de kırmızı bir defter duruyor. Onu getir. Önce neyi bilmediğimizi öğrenelim.']
       ], () => {
-        this.missionStage = 1;
-        this.setObjective('Magazzino 17’ye ulaş · kırmızı defteri al');
+        this.missionStage = STAGE.FIND_LEDGER;
+        this.setObjective(objectiveForStage(this.missionStage));
         this.saveGame();
       });
-    } else if (this.missionStage === 1) {
+    } else if (this.missionStage === STAGE.FIND_LEDGER) {
       this.startDialogue([
-        ['BORGE', 'Deftersiz dönme, ragazzo. Bu gece yalnızca ayaklarını değil, sabrını da sınayacağım.']
+        ['BORGE', 'Defter olmadan birini suçlayamam. Sen de suçlama, Gianlico.']
       ]);
-    } else if (this.missionStage === 2) {
+    } else if (this.missionStage === STAGE.RETURN_LEDGER) {
       this.startDialogue([
-        ['GIANLICO', 'Defter burada. Şimdi Cranier’i konuşacağız.'],
-        ['BORGE', 'Hayır. Şimdi ilk kez neden acele etmemen gerektiğini konuşacağız.'],
-        ['BORGE', 'Bu defterdeki isimlerden biri babanın ölümünden üç gün önce onunla görüşmüş.'],
-        ['GIANLICO', 'Kim?'],
-        ['BORGE', 'Yarın öğreneceksin. Bu gece eve git. Ve kimseye güvenme.']
+        ['GIANLICO', 'Son sayfada babamın işareti var. Ölmeden iki gün önce, 31 numaralı bir kayıt.'],
+        ['BORGE', 'Ödeme yazmıyor. Yalnızca teslimat. O hafta babanı görmedim; ne taşıdığını bilmiyorum.'],
+        ['GIANLICO', 'Bana şimdi mi söylüyorsun?'],
+        ['BORGE', 'Bildiğim her şeyi söylediğime inanmanı beklemiyorum. Evine git; bıraktığı şeylere bak.']
       ], () => {
-        this.missionStage = 3;
-        this.setObjective('Görev tamamlandı · Il Primo Passo');
+        this.missionStage = STAGE.GO_HOME;
+        this.setObjective(objectiveForStage(this.missionStage));
         this.saveGame();
-        this.showChapter('MISSIONE COMPLETA', 'IL PRIMO PASSO');
+        this.showChapter('CAPITOLO II', 'LA STANZA VUOTA');
       });
+    } else if (this.missionStage === STAGE.MEET_ELENA) {
+      this.startDialogue([['BORGE', 'Evde bir isim bulduysan onunla konuş. Benim anlattıklarıma güvenmek zorunda değilsin.']]);
+    } else if (this.missionStage === STAGE.QUESTION_BORGE) {
+      this.startDialogue([
+        ['GIANLICO', 'Elena sizi o gece babamla gördü. Bana görüşmediğinizi söylemiştin.'],
+        ['BORGE', 'Evet, yanındaydım. Yalan söyledim. Peşine düşeceğinden korktum.'],
+        ['GIANLICO', 'Onu korudun mu, yoksa kendini mi?'],
+        ['BORGE', 'Buna sözümle karar verme. 31 numaralı dolabı aç. İçindekiler ikimizi de suçlayabilir.']
+      ], () => {
+        this.missionStage = STAGE.OPEN_CABINET;
+        this.setObjective(objectiveForStage(this.missionStage));
+        this.saveGame();
+        this.showChapter('CAPITOLO III', 'IL NUMERO 31');
+      });
+    } else if (this.missionStage === STAGE.OPEN_CABINET) {
+      this.startDialogue([['BORGE', '31 numaralı dolap hâlâ Magazzino 17’de. Gerçeği istiyorsan önce oraya bak.']]);
+    } else if (this.missionStage === STAGE.CURRENT_END) {
+      this.startDialogue([['BORGE', 'Civitavecchia kaydını gördün. Şimdi o iki imzanın kimlere ait olduğunu kanıtlamamız gerek.']]);
+    } else {
+      this.startDialogue([['BORGE', 'Babanın eşyalarına bak, Gianlico. Sonra konuşuruz.']]);
     }
   }
 
   takeLedger() {
-    if (this.missionStage !== 1) return;
+    if (this.missionStage !== STAGE.FIND_LEDGER) return;
     this.hasLedger = true;
-    this.missionStage = 2;
+    this.missionStage = STAGE.RETURN_LEDGER;
     this.ledger.setActive(false).setVisible(false);
-    this.setObjective('Borge’a dön · defteri teslim et');
+    this.setObjective(objectiveForStage(this.missionStage));
     this.saveGame();
     this.cameras.main.flash(180, 183, 154, 88, false);
+  }
+
+  enterApartment() {
+    if (this.transitioningScene) return;
+    this.transitioningScene = true;
+    if (this.missionStage === STAGE.GO_HOME) this.missionStage = STAGE.SEARCH_COAT;
+    const saveData = this.saveGame('apartment');
+    this.cameras.main.fadeOut(240, 12, 10, 11);
+    this.time.delayedCall(260, () => this.scene.start('apartment', { saveData }));
+  }
+
+  interactElena() {
+    this.startDialogue([
+      ['GIANLICO', 'Babamın masasındaki notta adın vardı. Ölmeden önce seninle görüşmüş mü?'],
+      ['ELENA', 'O gece burada bilet sordu. Saat on biri geçmişti. Yanında Arisel vardı.'],
+      ['GIANLICO', 'Borge bana onu o hafta görmediğini söyledi.'],
+      ['ELENA', 'Bir araba geldi. Plakayı seçemedim. Baban gitmeden önce bana "Oğlum öğrenirse kendi karar versin" dedi.'],
+      ['GIANLICO', 'Neyi öğrenmem gerektiğini söylemedi mi?'],
+      ['ELENA', 'Hayır. Korkuyordu. Arisel ise hiçbir şey söylemedi.']
+    ], () => {
+      this.missionStage = STAGE.QUESTION_BORGE;
+      this.setObjective(objectiveForStage(this.missionStage));
+      this.saveGame();
+    });
+  }
+
+  openCabinet() {
+    if (!this.evidence.includes('key31')) {
+      this.startDialogue([['GIANLICO', 'Dolap kilitli. Paltodaki anahtarı tekrar bulmalıyım.']]);
+      return;
+    }
+    this.startDialogue([
+      ['GIANLICO', 'Anahtar uydu. İçeride bir sevkiyat dökümü var.'],
+      ['GIANLICO', 'Civitavecchia. Teslim alan iki imza: A. ve C. Babamın adı ikisinin arasında çizilmiş.'],
+      ['GIANLICO', 'Borge da Cranier da bu kaydı biliyordu. Babamın neden sustuğunu öğrenmeliyim.']
+    ], () => {
+      this.cabinetDoor.setFillStyle(0x1a1819);
+      this.evidence.push('manifest');
+      this.missionStage = STAGE.CURRENT_END;
+      this.setObjective(objectiveForStage(this.missionStage));
+      this.saveGame();
+      this.showChapter('INDIZIO TROVATO', 'CIVITAVECCHIA');
+    });
   }
 
   startDialogue(lines, onComplete) {
@@ -978,19 +1134,25 @@ class RomeScene extends Phaser.Scene {
 
   setObjective(text) {
     if (this.objectiveText) this.objectiveText.setText(text);
+    if (this.chapterLabel) {
+      this.chapterLabel.setText(`${chapterForStage(this.missionStage).number}  ·  OBIETTIVO`);
+    }
   }
 
-  saveGame() {
+  saveGame(scene = 'rome') {
     const saveData = {
-      chapter: 'Capitolo I',
-      location: 'Trastevere',
+      version: 2,
+      scene,
+      chapter: chapterForStage(this.missionStage).number,
+      location: scene === 'apartment' ? 'Casa Bianchi' : 'Trastevere',
       missionStage: this.missionStage,
       hasLedger: this.hasLedger,
+      evidence: this.evidence,
       playerX: Math.round(this.player?.x || 160),
-      playerY: Math.round(this.player?.y || 588),
-      savedAt: Date.now()
+      playerY: Math.round(this.player?.y || STREET_CHARACTER_Y),
+      streetX: Math.round(this.player?.x || 370)
     };
-    localStorage.setItem('sangue-save-v1', JSON.stringify(saveData));
+    return writeSave(saveData);
   }
 
   showChapter(kicker, title) {
@@ -1039,7 +1201,7 @@ const config = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  scene: [BootScene, MenuScene, IntroScene, RomeScene]
+  scene: [BootScene, MenuScene, IntroScene, RomeScene, ApartmentScene]
 };
 
 new Phaser.Game(config);

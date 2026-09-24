@@ -17,6 +17,13 @@ const looks = {
     shirt: '#c3ad82', shirtShade: '#95815e', trousers: '#29242a',
     trousersLight: '#433940', shoes: '#4a3330', shoeLight: '#745248',
     detail: '#b99a58'
+  },
+  elena: {
+    hair: '#241d1c', hairLight: '#5e4439', skin: '#b78164', skinShade: '#865947',
+    coat: '#39453f', coatLight: '#59695c', coatShade: '#27332d',
+    shirt: '#cbb49a', shirtShade: '#a48c75', trousers: '#303434',
+    trousersLight: '#4a5350', shoes: '#4a3935', shoeLight: '#705449',
+    detail: '#b59363', longHair: true
   }
 };
 
@@ -42,6 +49,7 @@ function head(ctx, c, x, y, blink = false) {
   block(ctx, c.hair, x, y + 3, 3, 6);
   block(ctx, c.hairLight, x + 2, y + 1, 6, 1);
   block(ctx, c.hairLight, x + 1, y + 4, 1, 3);
+  if (c.longHair) block(ctx, c.hair, x, y + 8, 2, 5);
   block(ctx, c.skinShade, x + 1, y + 7, 2, 2); // ear
   block(ctx, c.hair, x + 7, y + 5, 2, 1); // brow
   block(ctx, c.coatShade, x + 8, y + (blink ? 7 : 6), 1, 1); // eye
@@ -186,6 +194,7 @@ export function installCharacterSprites(scene) {
   makeSheet(scene, 'gianlico-sheet', looks.gianlico,
     [['idle', 4], ['walk', 8], ['crouch', 6], ['jump', 4]]);
   makeSheet(scene, 'borge-sheet', looks.borge, [['idle', 4]]);
+  makeSheet(scene, 'elena-sheet', looks.elena, [['idle', 4]]);
 
   const create = (key, sheet, start, end, frameRate) => scene.anims.create({
     key, frames: scene.anims.generateFrameNumbers(sheet, { start, end }),
@@ -195,5 +204,6 @@ export function installCharacterSprites(scene) {
   create('gianlico-walk', 'gianlico-sheet', 4, 11, 12);
   create('gianlico-crouch-walk', 'gianlico-sheet', 12, 17, 9);
   create('borge-idle', 'borge-sheet', 0, 3, 3);
+  create('elena-idle', 'elena-sheet', 0, 3, 3);
 }
 
