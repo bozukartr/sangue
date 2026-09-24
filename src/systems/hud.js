@@ -3,6 +3,7 @@
 import { GAME_W, GAME_H, DEPTH, FONT, HEX } from '../config.js';
 import { state, formatLira, ITEMS } from '../core/state.js';
 import { chapterForStage, objectiveForStage } from '../story.js';
+import { touch } from '../core/touch.js';
 
 export class Hud {
   constructor(scene, opts = {}) {
@@ -84,6 +85,8 @@ export class Hud {
   }
 
   setHint(value) {
+    // Keyboard hints make no sense next to on-screen buttons.
+    if (touch.enabled) value = '';
     this.hint.setText(value).setAlpha(1).setVisible(Boolean(value));
     this.scene.tweens.killTweensOf(this.hint);
     if (value) this.scene.tweens.add({ targets: this.hint, alpha: 0.35, delay: 9000, duration: 1200 });
