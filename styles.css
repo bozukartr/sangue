@@ -94,3 +94,66 @@ body.ready #boot-message {
     aspect-ratio: auto;
   }
 }
+/* Touch controls: only on coarse pointers (phones, tablets). */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+body.touch #touch-controls { display: block; }
+
+.touch-pad {
+  position: absolute;
+  display: grid;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.touch-move {
+  left: 2%;
+  bottom: 4%;
+  grid-template-columns: repeat(3, 12vmin);
+  grid-template-rows: repeat(2, 12vmin);
+}
+
+.touch-move .touch-up { grid-column: 2; grid-row: 1; }
+.touch-move .touch-left { grid-column: 1; grid-row: 2; }
+.touch-move .touch-down { grid-column: 2; grid-row: 2; }
+.touch-move .touch-right { grid-column: 3; grid-row: 2; }
+
+.touch-act {
+  right: 2%;
+  bottom: 4%;
+  grid-template-columns: repeat(2, 13vmin);
+  grid-template-rows: repeat(2, 13vmin);
+}
+
+.touch-sys {
+  right: 2%;
+  top: 3%;
+  grid-auto-flow: column;
+  grid-auto-columns: 9vmin;
+  grid-template-rows: 9vmin;
+}
+
+.touch-btn {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border: 2px solid rgba(185, 154, 88, .55);
+  border-radius: 50%;
+  background: rgba(16, 13, 13, .45);
+  color: var(--paper);
+  font: bold clamp(.6rem, 2.6vmin, 1.1rem) "Courier New", monospace;
+  letter-spacing: .05em;
+}
+
+.touch-btn.on {
+  background: rgba(111, 29, 27, .75);
+  border-color: var(--gold);
+}
+
+.touch-sys .touch-btn { border-radius: 8px; }
