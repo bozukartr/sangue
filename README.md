@@ -4,15 +4,17 @@
 
 ## Vertical slice
 
-İlk oynanabilir prototip şunları içerir:
+Oynanabilir prototip şunları içerir:
 
-- Gianlico Bianchi için koşma ve zıplama
-- Pixel-art placeholder karakter ve çevre grafikleri
-- Roma / Trastevere atmosferi
+- Gianlico için idle, yürüyüş, çömelerek yürüyüş ve zıplama kareleri
+- Borge ve Elena için idle animasyonu
+- Roma / Trastevere sokağı, Bar Arisel, Bianchi dairesi, durak ve Magazzino 17
 - Yağmur, parallax şehir silüeti ve sinematik bölüm kartları
-- Leonard “Borge” Arisel ile diyalog sistemi
-- Görev / objective HUD
-- İlk görev: Magazzino 17'den kırmızı hesap defterini alıp Borge'a dön
+- Diyaloglar, bölüm hedefleri ve sahne geçişleri
+- Capitolo I: kırmızı hesap defteri
+- Capitolo II: Bianchi dairesindeki ipuçları ve Elena'nın tanıklığı
+- Capitolo III açılışı: 31 numaralı dolap ve Civitavecchia sevkiyat kaydı
+- Eski `sangue-save-v1` kayıtlarını sürdüren sürümlü kayıt verisi
 
 ## Çalıştırma
 
@@ -32,6 +34,7 @@ http://localhost:8080
 
 - `A / D` veya `← / →`: hareket
 - `SPACE / W / ↑`: zıplama
+- `S / ↓`: çömelme
 - `E`: etkileşim / diyalog
 
 ## Teknik yaklaşım
@@ -40,6 +43,14 @@ http://localhost:8080
 - Vanilla JavaScript
 - CSS
 - Pixel-art rendering
-- Kodla üretilen geçici sprite'lar
+- Kodla üretilen 24×32 karakter sprite sheet'leri
 
-Gerçek sprite-sheet, ses, müzik ve bölüm asset'leri daha sonra mevcut oynanış sistemini değiştirmeden eklenebilir.
+Özel çizilmiş sprite'lar, ses ve müzik var olan animasyon ve sahne akışına sonradan eklenebilir.
+
+## Sonraki geliştirmeler
+
+- HUD'da önce görev ve ipuçları; ardından can, para ve itibar göstergeleri.
+- Envanterde hikâye kanıtları ile kullanılabilir eşyaları ayrı tutma.
+- Daireyi güvenli ev işlevine genişletme; yerel kayıt ve hazırlık noktası.
+- Dükkânlar ve para ekonomisi; ilerlemeyi kilitleyen zorunlu harcamalardan kaçınma.
+- Harita ve otobüs durakları üzerinden keşfedilmiş noktalar arasında hızlı seyahat.
